@@ -1,0 +1,12 @@
+go 1.22
+
+use (
+	./services/api-gateway
+	./services/upload-service
+	./services/saga-orchestrator
+	./services/transcoding-service
+	./services/thumbnail-service
+	./services/metadata-service
+	./services/notification-service
+	./services/media-query-service
+)

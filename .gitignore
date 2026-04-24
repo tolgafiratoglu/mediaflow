@@ -1,0 +1,16 @@
+# Binaries
+services/*/service
+
+# Go workspace sum
+go.work.sum
+
+# Environment
+.env
+*.env
+
+# IDE
+.idea/
+.vscode/
+
+# LocalStack data
+localstack/

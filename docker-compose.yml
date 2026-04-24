@@ -1,0 +1,122 @@
+services:
+
+  # ─── Infrastructure ────────────────────────────────────────────────────────
+
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: kafka
+    environment:
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  localstack:
+    image: localstack/localstack:3
+    container_name: localstack
+    environment:
+      - SERVICES=s3
+      - DEFAULT_REGION=us-east-1
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+
+  # ─── Services ──────────────────────────────────────────────────────────────
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - upload-service
+      - media-query-service
+
+  upload-service:
+    build:
+      context: ./services/upload-service
+    container_name: upload-service
+    ports:
+      - "8081:50051"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+
+  saga-orchestrator:
+    build:
+      context: ./services/saga-orchestrator
+    container_name: saga-orchestrator
+    ports:
+      - "8082:50051"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  transcoding-service:
+    build:
+      context: ./services/transcoding-service
+    container_name: transcoding-service
+    ports:
+      - "8083:50051"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+
+  thumbnail-service:
+    build:
+      context: ./services/thumbnail-service
+    container_name: thumbnail-service
+    ports:
+      - "8084:50051"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+
+  metadata-service:
+    build:
+      context: ./services/metadata-service
+    container_name: metadata-service
+    ports:
+      - "8085:50051"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+    container_name: notification-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  media-query-service:
+    build:
+      context: ./services/media-query-service
+    container_name: media-query-service
+    ports:
+      - "8086:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+volumes:
+  localstack_data:
