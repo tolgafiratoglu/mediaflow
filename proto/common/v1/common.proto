@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package mediaflow.common.v1;
+
+option go_package = "mediaflow/proto/common/v1;commonv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Status describes the high-level processing state of a media asset
+// or any long-running domain object that flows through the saga pipeline.
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_PENDING     = 1;
+  STATUS_PROCESSING  = 2;
+  STATUS_COMPLETED   = 3;
+  STATUS_FAILED      = 4;
+  STATUS_CANCELLED   = 5;
+}
+
+// Error is the canonical error envelope returned by domain RPCs when a
+// business rule is violated. Transport-level failures still use gRPC
+// status codes; this is for application-level errors carried inside
+// successful responses (e.g. inside saga replies).
+message Error {
+  string code     = 1; // machine-readable, e.g. "MEDIA_NOT_FOUND"
+  string message  = 2; // human-readable
+  string trace_id = 3; // OpenTelemetry trace id, useful for support
+}
+
+// Page is a cursor-based pagination wrapper used by list endpoints.
+message PageRequest {
+  // Opaque cursor returned by a previous response. Empty for the first page.
+  string cursor = 1;
+  // Maximum items to return. Server may cap this value.
+  int32  limit  = 2;
+}
+
+message PageResponse {
+  // Cursor to pass to the next request. Empty when there are no more items.
+  string next_cursor = 1;
+  // Total count is optional and may be unset for very large result sets.
+  int64  total       = 2;
+}
+
+// Audit captures who/when context for any persisted aggregate. Filled by
+// the producing service from the authenticated principal.
+message Audit {
+  string                    created_by = 1;
+  google.protobuf.Timestamp created_at = 2;
+  string                    updated_by = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+// EventEnvelope is what every Outbox row serializes into before being
+// produced to Kafka. The orchestrator and projections deserialize this.
+message EventEnvelope {
+  string                    event_id        = 1; // UUID, idempotency key
+  string                    event_type      = 2; // e.g. "MediaUploaded.v1"
+  string                    aggregate_id    = 3; // partition key
+  string                    correlation_id  = 4; // ties together a saga
+  string                    causation_id    = 5; // event_id of the cause
+  string                    trace_id        = 6;
+  google.protobuf.Timestamp occurred_at     = 7;
+  // Payload is the actual domain event, encoded as the proto message of
+  // the producing service (e.g. mediaflow.upload.v1.MediaUploaded).
+  bytes                     payload         = 8;
+  string                    payload_type    = 9; // fully-qualified proto name
+}
