@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package mediaflow.thumbnail.v1;
+
+option go_package = "mediaflow/proto/thumbnail/v1;thumbnailv1";
+
+import "google/protobuf/timestamp.proto";
+import "common/v1/common.proto";
+
+// ─── Domain ────────────────────────────────────────────────────────────────
+
+// Strategy controls how thumbnails are sampled from the source media.
+enum Strategy {
+  STRATEGY_UNSPECIFIED   = 0;
+  STRATEGY_FIRST_FRAME   = 1;
+  STRATEGY_MIDPOINT      = 2;
+  STRATEGY_EVERY_N_SECS  = 3;
+  STRATEGY_SCENE_CHANGE  = 4;
+}
+
+message Thumbnail {
+  string s3_bucket        = 1;
+  string s3_key           = 2;
+  int32  width            = 3;
+  int32  height           = 4;
+  double timestamp_seconds = 5; // offset within the source where it was sampled
+  int64  size_bytes       = 6;
+}
+
+message Job {
+  string                       job_id      = 1;
+  string                       media_id    = 2;
+  string                       saga_id     = 3;
+  Strategy                     strategy    = 4;
+  mediaflow.common.v1.Status   status      = 5;
+  repeated Thumbnail           thumbnails  = 6;
+  string                       last_error  = 7;
+  int32                        attempt     = 8;
+  google.protobuf.Timestamp    started_at  = 9;
+  google.protobuf.Timestamp    finished_at = 10;
+}
+
+// ─── RPC ───────────────────────────────────────────────────────────────────
+
+message GenerateThumbnailRequest {
+  string   media_id      = 1;
+  string   source_s3_key = 2;
+  Strategy strategy      = 3;
+  int32    every_n_secs  = 4; // used only with STRATEGY_EVERY_N_SECS
+  int32    width         = 5; // 0 means service default
+  int32    height        = 6; // 0 means service default
+}
+
+message GenerateThumbnailResponse {
+  Job job = 1;
+}
+
+message GetJobRequest { string job_id = 1; }
+
+// ─── Domain events (Outbox payloads, partitioned by media_id) ──────────────
+
+message ThumbnailGenerated {
+  string                       media_id     = 1;
+  repeated Thumbnail           thumbnails   = 2;
+  google.protobuf.Timestamp    generated_at = 3;
+}
+
+message ThumbnailFailed {
+  string                       media_id = 1;
+  mediaflow.common.v1.Error    error    = 2;
+  int32                        attempt  = 3;
+}
+
+// ─── Service ───────────────────────────────────────────────────────────────
+
+service ThumbnailService {
+  rpc GenerateThumbnail(GenerateThumbnailRequest) returns (GenerateThumbnailResponse);
+  rpc GetJob(GetJobRequest)                       returns (Job);
+}
