@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package mediaflow.notification.v1;
+
+option go_package = "mediaflow/proto/notification/v1;notificationv1";
+
+import "google/protobuf/timestamp.proto";
+import "common/v1/common.proto";
+
+// ─── Domain ────────────────────────────────────────────────────────────────
+
+enum Channel {
+  CHANNEL_UNSPECIFIED = 0;
+  CHANNEL_EMAIL       = 1;
+  CHANNEL_WEBHOOK     = 2;
+  CHANNEL_PUSH        = 3;
+}
+
+enum DeliveryState {
+  DELIVERY_STATE_UNSPECIFIED = 0;
+  DELIVERY_STATE_QUEUED      = 1;
+  DELIVERY_STATE_SENT        = 2;
+  DELIVERY_STATE_FAILED      = 3;
+  DELIVERY_STATE_DEFERRED    = 4; // circuit breaker open, waiting for retry
+}
+
+// Delivery is one notification attempt persisted by notification-service.
+// It is keyed by (notification_id, channel) so the same business event can
+// produce multiple deliveries (e.g. email + webhook).
+message Delivery {
+  string                       notification_id = 1;
+  string                       user_id         = 2;
+  string                       media_id        = 3; // related aggregate
+  Channel                      channel         = 4;
+  DeliveryState                state           = 5;
+  string                       template        = 6; // e.g. "media.ready"
+  string                       last_error      = 7;
+  int32                        attempt         = 8;
+  google.protobuf.Timestamp    sent_at         = 9;
+  google.protobuf.Timestamp    next_retry_at   = 10;
+}
+
+// ─── RPC ───────────────────────────────────────────────────────────────────
+
+// SendNotification is mostly used by ops to manually re-send. The normal
+// path is event-driven from media.processing.completed/failed topics.
+message SendNotificationRequest {
+  string              user_id   = 1;
+  string              media_id  = 2;
+  string              template  = 3;
+  repeated Channel    channels  = 4;
+  map<string, string> variables = 5; // template variable substitutions
+}
+
+message SendNotificationResponse {
+  repeated Delivery deliveries = 1;
+}
+
+message GetDeliveryStatusRequest { string notification_id = 1; }
+
+message GetDeliveryStatusResponse {
+  repeated Delivery deliveries = 1;
+}
+
+// ─── Domain events (Outbox payloads, partitioned by user_id) ───────────────
+
+// Re-emitted after a successful Channel delivery so audit trails / read
+// models can reflect that the user was actually notified.
+message NotificationSent {
+  string                       notification_id = 1;
+  string                       user_id         = 2;
+  string                       media_id        = 3;
+  Channel                      channel         = 4;
+  google.protobuf.Timestamp    sent_at         = 5;
+}
+
+message NotificationFailed {
+  string                       notification_id = 1;
+  string                       user_id         = 2;
+  Channel                      channel         = 3;
+  mediaflow.common.v1.Error    error           = 4;
+  int32                        attempt         = 5;
+}
+
+// ─── Service ───────────────────────────────────────────────────────────────
+
+service NotificationService {
+  rpc SendNotification(SendNotificationRequest)      returns (SendNotificationResponse);
+  rpc GetDeliveryStatus(GetDeliveryStatusRequest)    returns (GetDeliveryStatusResponse);
+}
