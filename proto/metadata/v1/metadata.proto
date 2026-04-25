@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package mediaflow.metadata.v1;
+
+option go_package = "mediaflow/proto/metadata/v1;metadatav1";
+
+import "google/protobuf/timestamp.proto";
+import "common/v1/common.proto";
+
+// ─── Domain ────────────────────────────────────────────────────────────────
+
+message VideoStream {
+  string codec        = 1;
+  int32  width        = 2;
+  int32  height       = 3;
+  double frame_rate   = 4;
+  int32  bitrate_kbps = 5;
+}
+
+message AudioStream {
+  string codec         = 1;
+  int32  channels      = 2;
+  int32  sample_rate   = 3;
+  int32  bitrate_kbps  = 4;
+  string language      = 5; // BCP-47, optional
+}
+
+// Metadata is the extracted technical description of a media asset. It is
+// owned by metadata-service and projected into the read model by
+// media-query-service.
+message Metadata {
+  string                       media_id          = 1;
+  string                       container         = 2; // e.g. "mp4", "mov"
+  double                       duration_seconds  = 3;
+  int64                        size_bytes        = 4;
+  repeated VideoStream         video_streams     = 5;
+  repeated AudioStream         audio_streams     = 6;
+  string                       checksum_sha256   = 7;
+  google.protobuf.Timestamp    extracted_at      = 8;
+}
+
+// ─── RPC ───────────────────────────────────────────────────────────────────
+
+message ExtractMetadataRequest {
+  string media_id      = 1;
+  string source_s3_key = 2;
+}
+
+message ExtractMetadataResponse {
+  Metadata metadata = 1;
+}
+
+message GetMetadataRequest { string media_id = 1; }
+
+// ─── Domain events (Outbox payloads, partitioned by media_id) ──────────────
+
+message MetadataExtracted {
+  Metadata                     metadata     = 1;
+  google.protobuf.Timestamp    extracted_at = 2;
+}
+
+message MetadataExtractionFailed {
+  string                       media_id = 1;
+  mediaflow.common.v1.Error    error    = 2;
+  int32                        attempt  = 3;
+}
+
+// ─── Service ───────────────────────────────────────────────────────────────
+
+service MetadataService {
+  rpc ExtractMetadata(ExtractMetadataRequest) returns (ExtractMetadataResponse);
+  rpc GetMetadata(GetMetadataRequest)         returns (Metadata);
+}
