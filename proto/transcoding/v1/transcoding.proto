@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package mediaflow.transcoding.v1;
+
+option go_package = "mediaflow/proto/transcoding/v1;transcodingv1";
+
+import "google/protobuf/timestamp.proto";
+import "common/v1/common.proto";
+
+// ─── Domain ────────────────────────────────────────────────────────────────
+
+// Profile describes a target rendition (codec + container + resolution).
+enum Profile {
+  PROFILE_UNSPECIFIED = 0;
+  PROFILE_HLS_240P    = 1;
+  PROFILE_HLS_480P    = 2;
+  PROFILE_HLS_720P    = 3;
+  PROFILE_HLS_1080P   = 4;
+  PROFILE_DASH_1080P  = 5;
+}
+
+// Variant is one produced rendition stored back to S3.
+message Variant {
+  Profile profile         = 1;
+  string  s3_bucket       = 2;
+  string  s3_key          = 3;
+  int64   size_bytes      = 4;
+  int32   width           = 5;
+  int32   height          = 6;
+  int32   bitrate_kbps    = 7;
+  double  duration_seconds = 8;
+}
+
+// Job is the persisted transcoding work item, one row per (media_id, profile).
+message Job {
+  string                       job_id        = 1;
+  string                       media_id      = 2;
+  string                       saga_id       = 3;
+  Profile                      profile       = 4;
+  mediaflow.common.v1.Status   status        = 5;
+  Variant                      output        = 6;
+  string                       last_error    = 7;
+  int32                        attempt       = 8;
+  google.protobuf.Timestamp    started_at    = 9;
+  google.protobuf.Timestamp    finished_at   = 10;
+}
+
+// ─── RPC ───────────────────────────────────────────────────────────────────
+
+// TranscodeNow is intended for ops/manual reruns. The normal path is
+// event-driven via saga.cmd.transcode.v1.
+message TranscodeNowRequest {
+  string           media_id        = 1;
+  string           source_s3_key   = 2;
+  repeated Profile profiles        = 3;
+}
+
+message TranscodeNowResponse {
+  repeated Job jobs = 1;
+}
+
+message GetJobRequest { string job_id = 1; }
+
+// ─── Domain events (Outbox payloads) ───────────────────────────────────────
+
+// Partition key on Kafka is media_id for all of these.
+
+message TranscodingStarted {
+  string  media_id = 1;
+  Profile profile  = 2;
+}
+
+message TranscodingCompleted {
+  string                       media_id    = 1;
+  repeated Variant             variants    = 2;
+  google.protobuf.Timestamp    completed_at = 3;
+}
+
+message TranscodingFailed {
+  string                       media_id   = 1;
+  Profile                      profile    = 2;
+  mediaflow.common.v1.Error    error      = 3;
+  int32                        attempt    = 4;
+}
+
+// ─── Service ───────────────────────────────────────────────────────────────
+
+service TranscodingService {
+  rpc TranscodeNow(TranscodeNowRequest) returns (TranscodeNowResponse);
+  rpc GetJob(GetJobRequest)             returns (Job);
+}
