@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+package mediaflow.saga.v1;
+
+option go_package = "mediaflow/proto/saga/v1;sagav1";
+
+import "google/protobuf/timestamp.proto";
+import "common/v1/common.proto";
+
+// ─── Saga state machine ────────────────────────────────────────────────────
+
+enum SagaType {
+  SAGA_TYPE_UNSPECIFIED       = 0;
+  SAGA_TYPE_MEDIA_PROCESSING  = 1;
+  SAGA_TYPE_MEDIA_DELETE      = 2;
+}
+
+enum SagaState {
+  SAGA_STATE_UNSPECIFIED      = 0;
+  SAGA_STATE_PENDING          = 1;
+  SAGA_STATE_RUNNING          = 2;
+  SAGA_STATE_COMPENSATING     = 3;
+  SAGA_STATE_COMPLETED        = 4;
+  SAGA_STATE_FAILED           = 5;
+}
+
+enum StepStatus {
+  STEP_STATUS_UNSPECIFIED  = 0;
+  STEP_STATUS_PENDING      = 1;
+  STEP_STATUS_DISPATCHED   = 2;
+  STEP_STATUS_SUCCEEDED    = 3;
+  STEP_STATUS_FAILED       = 4;
+  STEP_STATUS_COMPENSATED  = 5;
+  STEP_STATUS_TIMED_OUT    = 6;
+}
+
+// SagaStep is one node of the orchestration. Each step has a forward
+// command and an optional compensation command for rollback.
+message SagaStep {
+  int32                        step_no              = 1;
+  string                       name                 = 2; // e.g. "transcode"
+  StepStatus                   status               = 3;
+  int32                        attempt              = 4;
+  string                       last_error           = 5;
+  google.protobuf.Timestamp    deadline_at          = 6;
+  google.protobuf.Timestamp    started_at           = 7;
+  google.protobuf.Timestamp    finished_at          = 8;
+  string                       forward_command      = 9;  // e.g. "saga.cmd.transcode"
+  string                       compensation_command = 10; // e.g. "saga.cmd.transcode.cleanup"
+}
+
+// Saga is the top-level orchestration aggregate persisted by the
+// saga-orchestrator. The full step history is replayable from the steps list.
+message Saga {
+  string                       saga_id        = 1;
+  SagaType                     type           = 2;
+  SagaState                    state          = 3;
+  string                       aggregate_id   = 4; // e.g. media_id
+  string                       correlation_id = 5;
+  repeated SagaStep            steps          = 6;
+  bytes                        payload        = 7; // initial input, opaque
+  mediaflow.common.v1.Audit    audit          = 8;
+}
+
+// ─── RPC ───────────────────────────────────────────────────────────────────
+
+message StartSagaRequest {
+  SagaType type           = 1;
+  string   aggregate_id   = 2;
+  string   correlation_id = 3;
+  bytes    payload        = 4;
+}
+
+message GetSagaRequest  { string saga_id = 1; }
+
+message ListSagasRequest {
+  SagaType                            type   = 1; // optional filter
+  SagaState                           state  = 2; // optional filter
+  string                              user_id = 3; // optional filter
+  mediaflow.common.v1.PageRequest     page   = 4;
+}
+
+message ListSagasResponse {
+  repeated Saga                       sagas = 1;
+  mediaflow.common.v1.PageResponse    page  = 2;
+}
+
+message RetrySagaStepRequest {
+  string saga_id = 1;
+  int32  step_no = 2;
+}
+
+message RetrySagaStepResponse {
+  Saga saga = 1;
+}
+
+// ─── Saga commands & replies (Kafka payloads) ──────────────────────────────
+
+// SagaCommand is the envelope the orchestrator publishes to step-specific
+// command topics (saga.cmd.transcode.v1, saga.cmd.thumbnail.v1, ...).
+// The receiving service uses command_id as its idempotency key.
+message SagaCommand {
+  string                       command_id    = 1; // UUID, dedup key
+  string                       saga_id       = 2;
+  int32                        step_no       = 3;
+  string                       command_type  = 4; // e.g. "TranscodeMedia"
+  string                       aggregate_id  = 5; // e.g. media_id
+  bytes                        payload       = 6; // service-specific message
+  google.protobuf.Timestamp    issued_at     = 7;
+  google.protobuf.Timestamp    deadline_at   = 8;
+}
+
+// SagaReply is the envelope every worker publishes back to saga.reply.v1
+// when a command finishes. Partitioned by saga_id so the same orchestrator
+// instance handles all replies for a saga.
+message SagaReply {
+  string                       command_id   = 1; // matches the command
+  string                       saga_id      = 2;
+  int32                        step_no      = 3;
+  bool                         success      = 4;
+  mediaflow.common.v1.Error    error        = 5; // set if !success
+  bytes                        payload      = 6; // service-specific result
+  google.protobuf.Timestamp    finished_at  = 7;
+}
+
+// ─── Service ───────────────────────────────────────────────────────────────
+
+service SagaService {
+  rpc StartSaga(StartSagaRequest)               returns (Saga);
+  rpc GetSaga(GetSagaRequest)                   returns (Saga);
+  rpc ListSagas(ListSagasRequest)               returns (ListSagasResponse);
+  rpc RetrySagaStep(RetrySagaStepRequest)       returns (RetrySagaStepResponse);
+}
