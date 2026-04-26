@@ -1,0 +1,382 @@
+{
+  "info": {
+    "_postman_id": "f1a2b3c4-d5e6-7890-abcd-222222222222",
+    "name": "MediaFlow — gRPC",
+    "description": "gRPC requests for all internal services.\n\nEach request references the corresponding .proto file under proto/. In Postman, import the proto files via the service definition tab, or enable server reflection once services are running.\n\nAll gRPC host variables (UPLOAD_GRPC, SAGA_GRPC, etc.) are defined in the MediaFlow environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "upload-service",
+      "description": "Proto: proto/upload/v1/upload.proto\nHost: {{UPLOAD_GRPC}}",
+      "item": [
+        {
+          "name": "CreatePresignedUpload",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user-1\",\n  \"file_name\": \"demo-video.mp4\",\n  \"content_type\": \"video/mp4\",\n  \"size_bytes\": 104857600\n}"
+            },
+            "url": {
+              "raw": "grpc://{{UPLOAD_GRPC}}/mediaflow.upload.v1.UploadService/CreatePresignedUpload",
+              "protocol": "grpc",
+              "host": ["{{UPLOAD_GRPC}}"],
+              "path": ["mediaflow.upload.v1.UploadService", "CreatePresignedUpload"]
+            },
+            "description": "Generate a presigned S3 PUT URL.\n\nRequest: CreatePresignedUploadRequest\nResponse: CreatePresignedUploadResponse"
+          },
+          "response": []
+        },
+        {
+          "name": "ConfirmUpload",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"upload_id\": \"{{uploadId}}\",\n  \"etag\": \"\\\"d41d8cd98f00b204e9800998ecf8427e\\\"\"\n}"
+            },
+            "url": {
+              "raw": "grpc://{{UPLOAD_GRPC}}/mediaflow.upload.v1.UploadService/ConfirmUpload",
+              "protocol": "grpc",
+              "host": ["{{UPLOAD_GRPC}}"],
+              "path": ["mediaflow.upload.v1.UploadService", "ConfirmUpload"]
+            },
+            "description": "Confirm upload completion. Triggers outbox event → saga.\n\nRequest: ConfirmUploadRequest\nResponse: ConfirmUploadResponse"
+          },
+          "response": []
+        },
+        {
+          "name": "GetUpload",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"upload_id\": \"{{uploadId}}\"\n}"
+            },
+            "url": {
+              "raw": "grpc://{{UPLOAD_GRPC}}/mediaflow.upload.v1.UploadService/GetUpload",
+              "protocol": "grpc",
+              "host": ["{{UPLOAD_GRPC}}"],
+              "path": ["mediaflow.upload.v1.UploadService", "GetUpload"]
+            },
+            "description": "Retrieve upload status.\n\nRequest: GetUploadRequest\nResponse: Upload"
+          },
+          "response": []
+        },
+        {
+          "name": "CancelUpload",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"upload_id\": \"{{uploadId}}\",\n  \"reason\": \"User cancelled\"\n}"
+            },
+            "url": {
+              "raw": "grpc://{{UPLOAD_GRPC}}/mediaflow.upload.v1.UploadService/CancelUpload",
+              "protocol": "grpc",
+              "host": ["{{UPLOAD_GRPC}}"],
+              "path": ["mediaflow.upload.v1.UploadService", "CancelUpload"]
+            },
+            "description": "Cancel an in-progress upload.\n\nRequest: CancelUploadRequest\nResponse: CancelUploadResponse"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "saga-orchestrator",
+      "description": "Proto: proto/saga/v1/saga.proto\nHost: {{SAGA_GRPC}}",
+      "item": [
+        {
+          "name": "StartSaga",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"SAGA_TYPE_MEDIA_PROCESSING\",\n  \"aggregate_id\": \"{{mediaId}}\",\n  \"correlation_id\": \"manual-test-001\",\n  \"payload\": \"\"\n}"
+            },
+            "url": {
+              "raw": "grpc://{{SAGA_GRPC}}/mediaflow.saga.v1.SagaService/StartSaga",
+              "protocol": "grpc",
+              "host": ["{{SAGA_GRPC}}"],
+              "path": ["mediaflow.saga.v1.SagaService", "StartSaga"]
+            },
+            "description": "Manually start a saga. The normal path is event-driven via Kafka.\n\nRequest: StartSagaRequest\nResponse: Saga"
+          },
+          "response": []
+        },
+        {
+          "name": "GetSaga",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saga_id\": \"{{sagaId}}\"\n}"
+            },
+            "url": {
+              "raw": "grpc://{{SAGA_GRPC}}/mediaflow.saga.v1.SagaService/GetSaga",
+              "protocol": "grpc",
+              "host": ["{{SAGA_GRPC}}"],
+              "path": ["mediaflow.saga.v1.SagaService", "GetSaga"]
+            },
+            "description": "Get saga state and full step history.\n\nRequest: GetSagaRequest\nResponse: Saga"
+          },
+          "response": []
+        },
+        {
+          "name": "ListSagas",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"SAGA_TYPE_MEDIA_PROCESSING\",\n  \"state\": \"SAGA_STATE_RUNNING\",\n  \"page\": {\n    \"cursor\": \"\",\n    \"limit\": 10\n  }\n}"
+            },
+            "url": {
+              "raw": "grpc://{{SAGA_GRPC}}/mediaflow.saga.v1.SagaService/ListSagas",
+              "protocol": "grpc",
+              "host": ["{{SAGA_GRPC}}"],
+              "path": ["mediaflow.saga.v1.SagaService", "ListSagas"]
+            },
+            "description": "List sagas with optional type/state/userId filters and cursor pagination.\n\nRequest: ListSagasRequest\nResponse: ListSagasResponse"
+          },
+          "response": []
+        },
+        {
+          "name": "RetrySagaStep",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"saga_id\": \"{{sagaId}}\",\n  \"step_no\": 2\n}"
+            },
+            "url": {
+              "raw": "grpc://{{SAGA_GRPC}}/mediaflow.saga.v1.SagaService/RetrySagaStep",
+              "protocol": "grpc",
+              "host": ["{{SAGA_GRPC}}"],
+              "path": ["mediaflow.saga.v1.SagaService", "RetrySagaStep"]
+            },
+            "description": "Manually retry a failed saga step (ops use case).\n\nRequest: RetrySagaStepRequest\nResponse: RetrySagaStepResponse"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "transcoding-service",
+      "description": "Proto: proto/transcoding/v1/transcoding.proto\nHost: {{TRANSCODING_GRPC}}",
+      "item": [
+        {
+          "name": "TranscodeNow",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"media_id\": \"{{mediaId}}\",\n  \"source_s3_key\": \"uploads/demo-video.mp4\",\n  \"profiles\": [\"PROFILE_HLS_720P\", \"PROFILE_HLS_1080P\"]\n}"
+            },
+            "url": {
+              "raw": "grpc://{{TRANSCODING_GRPC}}/mediaflow.transcoding.v1.TranscodingService/TranscodeNow",
+              "protocol": "grpc",
+              "host": ["{{TRANSCODING_GRPC}}"],
+              "path": ["mediaflow.transcoding.v1.TranscodingService", "TranscodeNow"]
+            },
+            "description": "Manually trigger transcoding. Normal path is saga.cmd.transcode.v1.\n\nRequest: TranscodeNowRequest\nResponse: TranscodeNowResponse"
+          },
+          "response": []
+        },
+        {
+          "name": "GetJob",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_id\": \"job-uuid-here\"\n}"
+            },
+            "url": {
+              "raw": "grpc://{{TRANSCODING_GRPC}}/mediaflow.transcoding.v1.TranscodingService/GetJob",
+              "protocol": "grpc",
+              "host": ["{{TRANSCODING_GRPC}}"],
+              "path": ["mediaflow.transcoding.v1.TranscodingService", "GetJob"]
+            },
+            "description": "Get transcoding job status and output variants.\n\nRequest: GetJobRequest\nResponse: Job"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "thumbnail-service",
+      "description": "Proto: proto/thumbnail/v1/thumbnail.proto\nHost: {{THUMBNAIL_GRPC}}",
+      "item": [
+        {
+          "name": "GenerateThumbnail",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"media_id\": \"{{mediaId}}\",\n  \"source_s3_key\": \"uploads/demo-video.mp4\",\n  \"strategy\": \"STRATEGY_MIDPOINT\",\n  \"width\": 320,\n  \"height\": 180\n}"
+            },
+            "url": {
+              "raw": "grpc://{{THUMBNAIL_GRPC}}/mediaflow.thumbnail.v1.ThumbnailService/GenerateThumbnail",
+              "protocol": "grpc",
+              "host": ["{{THUMBNAIL_GRPC}}"],
+              "path": ["mediaflow.thumbnail.v1.ThumbnailService", "GenerateThumbnail"]
+            },
+            "description": "Manually trigger thumbnail generation. Normal path is saga.cmd.thumbnail.v1.\n\nRequest: GenerateThumbnailRequest\nResponse: GenerateThumbnailResponse"
+          },
+          "response": []
+        },
+        {
+          "name": "GetJob",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_id\": \"job-uuid-here\"\n}"
+            },
+            "url": {
+              "raw": "grpc://{{THUMBNAIL_GRPC}}/mediaflow.thumbnail.v1.ThumbnailService/GetJob",
+              "protocol": "grpc",
+              "host": ["{{THUMBNAIL_GRPC}}"],
+              "path": ["mediaflow.thumbnail.v1.ThumbnailService", "GetJob"]
+            },
+            "description": "Get thumbnail job status and output list.\n\nRequest: GetJobRequest\nResponse: Job"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "metadata-service",
+      "description": "Proto: proto/metadata/v1/metadata.proto\nHost: {{METADATA_GRPC}}",
+      "item": [
+        {
+          "name": "ExtractMetadata",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"media_id\": \"{{mediaId}}\",\n  \"source_s3_key\": \"uploads/demo-video.mp4\"\n}"
+            },
+            "url": {
+              "raw": "grpc://{{METADATA_GRPC}}/mediaflow.metadata.v1.MetadataService/ExtractMetadata",
+              "protocol": "grpc",
+              "host": ["{{METADATA_GRPC}}"],
+              "path": ["mediaflow.metadata.v1.MetadataService", "ExtractMetadata"]
+            },
+            "description": "Manually trigger metadata extraction. Normal path is saga.cmd.metadata.v1.\n\nRequest: ExtractMetadataRequest\nResponse: ExtractMetadataResponse"
+          },
+          "response": []
+        },
+        {
+          "name": "GetMetadata",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"media_id\": \"{{mediaId}}\"\n}"
+            },
+            "url": {
+              "raw": "grpc://{{METADATA_GRPC}}/mediaflow.metadata.v1.MetadataService/GetMetadata",
+              "protocol": "grpc",
+              "host": ["{{METADATA_GRPC}}"],
+              "path": ["mediaflow.metadata.v1.MetadataService", "GetMetadata"]
+            },
+            "description": "Get extracted metadata for a media asset.\n\nRequest: GetMetadataRequest\nResponse: Metadata"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "notification-service",
+      "description": "Proto: proto/notification/v1/notification.proto\nHost: notification-service has no exposed port (consumer only). Use saga-orchestrator's host or add a port mapping to docker-compose.yml if needed.",
+      "item": [
+        {
+          "name": "SendNotification",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user-1\",\n  \"media_id\": \"{{mediaId}}\",\n  \"template\": \"media.ready\",\n  \"channels\": [\"CHANNEL_EMAIL\"],\n  \"variables\": {\n    \"media_title\": \"Demo Video\"\n  }\n}"
+            },
+            "url": {
+              "raw": "grpc://localhost:50051/mediaflow.notification.v1.NotificationService/SendNotification",
+              "protocol": "grpc",
+              "host": ["localhost:50051"],
+              "path": ["mediaflow.notification.v1.NotificationService", "SendNotification"]
+            },
+            "description": "Manually send a notification. Normal path is event-driven from media.processing.completed.\n\nNote: notification-service has no exposed port in docker-compose. Add a port mapping or connect via Docker network.\n\nRequest: SendNotificationRequest\nResponse: SendNotificationResponse"
+          },
+          "response": []
+        },
+        {
+          "name": "GetDeliveryStatus",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/grpc" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notification_id\": \"notif-uuid-here\"\n}"
+            },
+            "url": {
+              "raw": "grpc://localhost:50051/mediaflow.notification.v1.NotificationService/GetDeliveryStatus",
+              "protocol": "grpc",
+              "host": ["localhost:50051"],
+              "path": ["mediaflow.notification.v1.NotificationService", "GetDeliveryStatus"]
+            },
+            "description": "Check delivery status across all channels for a notification.\n\nRequest: GetDeliveryStatusRequest\nResponse: GetDeliveryStatusResponse"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
