@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package mediaflow.saga.v1;
 
-option go_package = "mediaflow/proto/saga/v1;sagav1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/saga/v1;sagav1";
 
 import "google/protobuf/timestamp.proto";
 import "common/v1/common.proto";

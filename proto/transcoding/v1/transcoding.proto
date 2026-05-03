@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package mediaflow.transcoding.v1;
 
-option go_package = "mediaflow/proto/transcoding/v1;transcodingv1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/transcoding/v1;transcodingv1";
 
 import "google/protobuf/timestamp.proto";
 import "common/v1/common.proto";

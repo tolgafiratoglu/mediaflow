@@ -17,16 +17,17 @@ ps:
 
 proto:
 	@echo "Generating proto files..."
-	@find proto -name "*.proto" -exec \
+	@find proto -name "*.proto" -not -path "*/vendor/*" -exec \
 		protoc \
-		--go_out=. \
+		--proto_path=proto \
+		--go_out=proto \
 		--go_opt=paths=source_relative \
-		--go-grpc_out=. \
+		--go-grpc_out=proto \
 		--go-grpc_opt=paths=source_relative \
 		{} \;
 
 tidy:
-	@for dir in services/*/; do \
+	@for dir in proto services/*/; do \
 		echo "→ $$dir"; \
 		cd $$dir && go mod tidy && cd ../..; \
 	done

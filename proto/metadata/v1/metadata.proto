@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package mediaflow.metadata.v1;
 
-option go_package = "mediaflow/proto/metadata/v1;metadatav1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/metadata/v1;metadatav1";
 
 import "google/protobuf/timestamp.proto";
 import "common/v1/common.proto";

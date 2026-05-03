@@ -37,6 +37,21 @@ services:
     volumes:
       - localstack_data:/var/lib/localstack
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mediaflow
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # ─── Services ──────────────────────────────────────────────────────────────
 
   api-gateway:
@@ -55,11 +70,19 @@ services:
     container_name: upload-service
     ports:
       - "8081:50051"
+    environment:
+      - GRPC_ADDR=:50051
+      - DB_DSN=postgres://postgres:postgres@postgres:5432/mediaflow?sslmode=disable
+      - S3_ENDPOINT=http://localstack:4566
+      - S3_BUCKET=mediaflow
+      - S3_REGION=us-east-1
     depends_on:
       kafka:
         condition: service_healthy
       localstack:
         condition: service_started
+      postgres:
+        condition: service_healthy
 
   saga-orchestrator:
     build:

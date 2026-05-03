@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package mediaflow.notification.v1;
 
-option go_package = "mediaflow/proto/notification/v1;notificationv1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/notification/v1;notificationv1";
 
 import "google/protobuf/timestamp.proto";
 import "common/v1/common.proto";

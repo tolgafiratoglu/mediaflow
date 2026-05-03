@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package mediaflow.upload.v1;
 
-option go_package = "mediaflow/proto/upload/v1;uploadv1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/upload/v1;uploadv1";
 
 import "google/protobuf/timestamp.proto";
 import "common/v1/common.proto";

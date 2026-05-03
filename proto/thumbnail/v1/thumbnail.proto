@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package mediaflow.thumbnail.v1;
 
-option go_package = "mediaflow/proto/thumbnail/v1;thumbnailv1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/thumbnail/v1;thumbnailv1";
 
 import "google/protobuf/timestamp.proto";
 import "common/v1/common.proto";
