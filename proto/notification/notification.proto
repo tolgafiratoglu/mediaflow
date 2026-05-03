@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-package mediaflow.notification.v1;
+package mediaflow.notification;
 
-option go_package = "github.com/tolgafiratoglu/mediaflow/proto/notification/v1;notificationv1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/notification;notification";
 
 import "google/protobuf/timestamp.proto";
-import "common/v1/common.proto";
+import "common/common.proto";
 
 // ─── Domain ────────────────────────────────────────────────────────────────
 
@@ -28,16 +28,16 @@ enum DeliveryState {
 // It is keyed by (notification_id, channel) so the same business event can
 // produce multiple deliveries (e.g. email + webhook).
 message Delivery {
-  string                       notification_id = 1;
-  string                       user_id         = 2;
-  string                       media_id        = 3; // related aggregate
-  Channel                      channel         = 4;
-  DeliveryState                state           = 5;
-  string                       template        = 6; // e.g. "media.ready"
-  string                       last_error      = 7;
-  int32                        attempt         = 8;
-  google.protobuf.Timestamp    sent_at         = 9;
-  google.protobuf.Timestamp    next_retry_at   = 10;
+  string                    notification_id = 1;
+  string                    user_id         = 2;
+  string                    media_id        = 3; // related aggregate
+  Channel                   channel         = 4;
+  DeliveryState             state           = 5;
+  string                    template        = 6; // e.g. "media.ready"
+  string                    last_error      = 7;
+  int32                     attempt         = 8;
+  google.protobuf.Timestamp sent_at         = 9;
+  google.protobuf.Timestamp next_retry_at   = 10;
 }
 
 // ─── RPC ───────────────────────────────────────────────────────────────────
@@ -64,27 +64,25 @@ message GetDeliveryStatusResponse {
 
 // ─── Domain events (Outbox payloads, partitioned by user_id) ───────────────
 
-// Re-emitted after a successful Channel delivery so audit trails / read
-// models can reflect that the user was actually notified.
 message NotificationSent {
-  string                       notification_id = 1;
-  string                       user_id         = 2;
-  string                       media_id        = 3;
-  Channel                      channel         = 4;
-  google.protobuf.Timestamp    sent_at         = 5;
+  string                    notification_id = 1;
+  string                    user_id         = 2;
+  string                    media_id        = 3;
+  Channel                   channel         = 4;
+  google.protobuf.Timestamp sent_at         = 5;
 }
 
 message NotificationFailed {
-  string                       notification_id = 1;
-  string                       user_id         = 2;
-  Channel                      channel         = 3;
-  mediaflow.common.v1.Error    error           = 4;
-  int32                        attempt         = 5;
+  string                  notification_id = 1;
+  string                  user_id         = 2;
+  Channel                 channel         = 3;
+  mediaflow.common.Error  error           = 4;
+  int32                   attempt         = 5;
 }
 
 // ─── Service ───────────────────────────────────────────────────────────────
 
 service NotificationService {
-  rpc SendNotification(SendNotificationRequest)      returns (SendNotificationResponse);
-  rpc GetDeliveryStatus(GetDeliveryStatusRequest)    returns (GetDeliveryStatusResponse);
+  rpc SendNotification(SendNotificationRequest)   returns (SendNotificationResponse);
+  rpc GetDeliveryStatus(GetDeliveryStatusRequest) returns (GetDeliveryStatusResponse);
 }

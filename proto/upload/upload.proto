@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-package mediaflow.upload.v1;
+package mediaflow.upload;
 
-option go_package = "github.com/tolgafiratoglu/mediaflow/proto/upload/v1;uploadv1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/upload;upload";
 
 import "google/protobuf/timestamp.proto";
-import "common/v1/common.proto";
+import "common/common.proto";
 
 // ─── Domain ────────────────────────────────────────────────────────────────
 
@@ -14,18 +14,18 @@ import "common/v1/common.proto";
 // confirms the S3 PUT completed. From there, a Media aggregate is created
 // and the saga is started.
 message Upload {
-  string                       upload_id     = 1;
-  string                       user_id       = 2;
-  string                       file_name     = 3;
-  string                       content_type  = 4;
-  int64                        size_bytes    = 5;
-  string                       s3_bucket     = 6;
-  string                       s3_key        = 7;
-  mediaflow.common.v1.Status   status        = 8;
-  string                       media_id      = 9;  // populated after confirm
-  string                       saga_id       = 10; // populated after confirm
-  google.protobuf.Timestamp    expires_at    = 11;
-  mediaflow.common.v1.Audit    audit         = 12;
+  string                    upload_id     = 1;
+  string                    user_id       = 2;
+  string                    file_name     = 3;
+  string                    content_type  = 4;
+  int64                     size_bytes    = 5;
+  string                    s3_bucket     = 6;
+  string                    s3_key        = 7;
+  mediaflow.common.Status   status        = 8;
+  string                    media_id      = 9;  // populated after confirm
+  string                    saga_id       = 10; // populated after confirm
+  google.protobuf.Timestamp expires_at    = 11;
+  mediaflow.common.Audit    audit         = 12;
 }
 
 // ─── RPC: CreatePresignedUpload ────────────────────────────────────────────
@@ -38,10 +38,10 @@ message CreatePresignedUploadRequest {
 }
 
 message CreatePresignedUploadResponse {
-  string                       upload_id  = 1;
-  string                       url        = 2; // presigned PUT URL
-  map<string, string>          headers    = 3; // headers the client must send
-  google.protobuf.Timestamp    expires_at = 4;
+  string                    upload_id  = 1;
+  string                    url        = 2; // presigned PUT URL
+  map<string, string>       headers    = 3; // headers the client must send
+  google.protobuf.Timestamp expires_at = 4;
 }
 
 // ─── RPC: ConfirmUpload ────────────────────────────────────────────────────
@@ -53,9 +53,9 @@ message ConfirmUploadRequest {
 }
 
 message ConfirmUploadResponse {
-  string                       media_id = 1;
-  string                       saga_id  = 2;
-  mediaflow.common.v1.Status   status   = 3;
+  string                    media_id = 1;
+  string                    saga_id  = 2;
+  mediaflow.common.Status   status   = 3;
 }
 
 // ─── RPC: Get / Cancel ─────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ message ConfirmUploadResponse {
 message GetUploadRequest  { string upload_id = 1; }
 
 message CancelUploadRequest  { string upload_id = 1; string reason = 2; }
-message CancelUploadResponse { mediaflow.common.v1.Status status = 1; }
+message CancelUploadResponse { mediaflow.common.Status status = 1; }
 
 // ─── Domain events (Outbox payloads) ───────────────────────────────────────
 
@@ -71,14 +71,14 @@ message CancelUploadResponse { mediaflow.common.v1.Status status = 1; }
 // Kafka is media_id so that all subsequent events for the same media are
 // processed in order by a single consumer instance.
 message MediaUploaded {
-  string                       media_id     = 1;
-  string                       upload_id    = 2;
-  string                       user_id      = 3;
-  string                       s3_bucket    = 4;
-  string                       s3_key       = 5;
-  string                       content_type = 6;
-  int64                        size_bytes   = 7;
-  google.protobuf.Timestamp    uploaded_at  = 8;
+  string                    media_id     = 1;
+  string                    upload_id    = 2;
+  string                    user_id      = 3;
+  string                    s3_bucket    = 4;
+  string                    s3_key       = 5;
+  string                    content_type = 6;
+  int64                     size_bytes   = 7;
+  google.protobuf.Timestamp uploaded_at  = 8;
 }
 
 message UploadCancelled {

@@ -11,12 +11,12 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	uploadv1 "github.com/tolgafiratoglu/mediaflow/proto/upload/v1"
+	"github.com/tolgafiratoglu/mediaflow/proto/upload"
 	s3client "github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/s3"
 )
 
 type UploadHandler struct {
-	uploadv1.UnimplementedUploadServiceServer
+	upload.UnimplementedUploadServiceServer
 	db         *pgxpool.Pool
 	s3         *s3client.Client
 	presignTTL time.Duration
@@ -28,8 +28,8 @@ func New(db *pgxpool.Pool, s3 *s3client.Client, presignTTL time.Duration) *Uploa
 
 func (h *UploadHandler) CreatePresignedUpload(
 	ctx context.Context,
-	req *uploadv1.CreatePresignedUploadRequest,
-) (*uploadv1.CreatePresignedUploadResponse, error) {
+	req *upload.CreatePresignedUploadRequest,
+) (*upload.CreatePresignedUploadResponse, error) {
 	if req.UserId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
@@ -57,7 +57,7 @@ func (h *UploadHandler) CreatePresignedUpload(
 		return nil, status.Errorf(codes.Internal, "db insert: %v", err)
 	}
 
-	return &uploadv1.CreatePresignedUploadResponse{
+	return &upload.CreatePresignedUploadResponse{
 		UploadId:  uploadID,
 		Url:       presigned.URL,
 		Headers:   presigned.Headers,

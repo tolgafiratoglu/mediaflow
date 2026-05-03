@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package mediaflow.common.v1;
+package mediaflow.common;
 
-option go_package = "github.com/tolgafiratoglu/mediaflow/proto/common/v1;commonv1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/common;common";
 
 import "google/protobuf/timestamp.proto";
 
@@ -55,14 +55,14 @@ message Audit {
 // produced to Kafka. The orchestrator and projections deserialize this.
 message EventEnvelope {
   string                    event_id        = 1; // UUID, idempotency key
-  string                    event_type      = 2; // e.g. "MediaUploaded.v1"
+  string                    event_type      = 2; // e.g. "MediaUploaded"
   string                    aggregate_id    = 3; // partition key
   string                    correlation_id  = 4; // ties together a saga
   string                    causation_id    = 5; // event_id of the cause
   string                    trace_id        = 6;
   google.protobuf.Timestamp occurred_at     = 7;
   // Payload is the actual domain event, encoded as the proto message of
-  // the producing service (e.g. mediaflow.upload.v1.MediaUploaded).
+  // the producing service (e.g. mediaflow.upload.MediaUploaded).
   bytes                     payload         = 8;
   string                    payload_type    = 9; // fully-qualified proto name
 }

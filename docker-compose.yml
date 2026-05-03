@@ -60,6 +60,9 @@ services:
     container_name: api-gateway
     ports:
       - "8080:8080"
+    environment:
+      - HTTP_ADDR=:8080
+      - UPLOAD_SERVICE_ADDR=upload-service:50051
     depends_on:
       - upload-service
       - media-query-service

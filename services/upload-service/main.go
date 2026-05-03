@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 
-	uploadv1 "github.com/tolgafiratoglu/mediaflow/proto/upload/v1"
+	"github.com/tolgafiratoglu/mediaflow/proto/upload"
 	"github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/config"
 	"github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/db"
 	"github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/handler"
@@ -46,7 +46,7 @@ func main() {
 
 	srv := grpc.NewServer()
 	grpc_health_v1.RegisterHealthServer(srv, health.NewServer())
-	uploadv1.RegisterUploadServiceServer(srv, handler.New(pool, s3, cfg.PresignTTL))
+	upload.RegisterUploadServiceServer(srv, handler.New(pool, s3, cfg.PresignTTL))
 
 	log.Printf("upload-service starting on %s", cfg.GRPCAddr)
 	if err := srv.Serve(lis); err != nil {

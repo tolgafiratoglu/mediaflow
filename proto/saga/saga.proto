@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-package mediaflow.saga.v1;
+package mediaflow.saga;
 
-option go_package = "github.com/tolgafiratoglu/mediaflow/proto/saga/v1;sagav1";
+option go_package = "github.com/tolgafiratoglu/mediaflow/proto/saga;saga";
 
 import "google/protobuf/timestamp.proto";
-import "common/v1/common.proto";
+import "common/common.proto";
 
 // ─── Saga state machine ────────────────────────────────────────────────────
 
@@ -52,14 +52,14 @@ message SagaStep {
 // Saga is the top-level orchestration aggregate persisted by the
 // saga-orchestrator. The full step history is replayable from the steps list.
 message Saga {
-  string                       saga_id        = 1;
-  SagaType                     type           = 2;
-  SagaState                    state          = 3;
-  string                       aggregate_id   = 4; // e.g. media_id
-  string                       correlation_id = 5;
-  repeated SagaStep            steps          = 6;
-  bytes                        payload        = 7; // initial input, opaque
-  mediaflow.common.v1.Audit    audit          = 8;
+  string                    saga_id        = 1;
+  SagaType                  type           = 2;
+  SagaState                 state          = 3;
+  string                    aggregate_id   = 4; // e.g. media_id
+  string                    correlation_id = 5;
+  repeated SagaStep         steps          = 6;
+  bytes                     payload        = 7; // initial input, opaque
+  mediaflow.common.Audit    audit          = 8;
 }
 
 // ─── RPC ───────────────────────────────────────────────────────────────────
@@ -74,15 +74,15 @@ message StartSagaRequest {
 message GetSagaRequest  { string saga_id = 1; }
 
 message ListSagasRequest {
-  SagaType                            type   = 1; // optional filter
-  SagaState                           state  = 2; // optional filter
-  string                              user_id = 3; // optional filter
-  mediaflow.common.v1.PageRequest     page   = 4;
+  SagaType                         type    = 1; // optional filter
+  SagaState                        state   = 2; // optional filter
+  string                           user_id = 3; // optional filter
+  mediaflow.common.PageRequest     page    = 4;
 }
 
 message ListSagasResponse {
-  repeated Saga                       sagas = 1;
-  mediaflow.common.v1.PageResponse    page  = 2;
+  repeated Saga                    sagas = 1;
+  mediaflow.common.PageResponse    page  = 2;
 }
 
 message RetrySagaStepRequest {
@@ -97,37 +97,37 @@ message RetrySagaStepResponse {
 // ─── Saga commands & replies (Kafka payloads) ──────────────────────────────
 
 // SagaCommand is the envelope the orchestrator publishes to step-specific
-// command topics (saga.cmd.transcode.v1, saga.cmd.thumbnail.v1, ...).
+// command topics (saga.cmd.transcode, saga.cmd.thumbnail, ...).
 // The receiving service uses command_id as its idempotency key.
 message SagaCommand {
-  string                       command_id    = 1; // UUID, dedup key
-  string                       saga_id       = 2;
-  int32                        step_no       = 3;
-  string                       command_type  = 4; // e.g. "TranscodeMedia"
-  string                       aggregate_id  = 5; // e.g. media_id
-  bytes                        payload       = 6; // service-specific message
-  google.protobuf.Timestamp    issued_at     = 7;
-  google.protobuf.Timestamp    deadline_at   = 8;
+  string                    command_id    = 1; // UUID, dedup key
+  string                    saga_id       = 2;
+  int32                     step_no       = 3;
+  string                    command_type  = 4; // e.g. "TranscodeMedia"
+  string                    aggregate_id  = 5; // e.g. media_id
+  bytes                     payload       = 6; // service-specific message
+  google.protobuf.Timestamp issued_at     = 7;
+  google.protobuf.Timestamp deadline_at   = 8;
 }
 
-// SagaReply is the envelope every worker publishes back to saga.reply.v1
+// SagaReply is the envelope every worker publishes back to saga.reply
 // when a command finishes. Partitioned by saga_id so the same orchestrator
 // instance handles all replies for a saga.
 message SagaReply {
-  string                       command_id   = 1; // matches the command
-  string                       saga_id      = 2;
-  int32                        step_no      = 3;
-  bool                         success      = 4;
-  mediaflow.common.v1.Error    error        = 5; // set if !success
-  bytes                        payload      = 6; // service-specific result
-  google.protobuf.Timestamp    finished_at  = 7;
+  string                    command_id   = 1; // matches the command
+  string                    saga_id      = 2;
+  int32                     step_no      = 3;
+  bool                      success      = 4;
+  mediaflow.common.Error    error        = 5; // set if !success
+  bytes                     payload      = 6; // service-specific result
+  google.protobuf.Timestamp finished_at  = 7;
 }
 
 // ─── Service ───────────────────────────────────────────────────────────────
 
 service SagaService {
-  rpc StartSaga(StartSagaRequest)               returns (Saga);
-  rpc GetSaga(GetSagaRequest)                   returns (Saga);
-  rpc ListSagas(ListSagasRequest)               returns (ListSagasResponse);
-  rpc RetrySagaStep(RetrySagaStepRequest)       returns (RetrySagaStepResponse);
+  rpc StartSaga(StartSagaRequest)         returns (Saga);
+  rpc GetSaga(GetSagaRequest)             returns (Saga);
+  rpc ListSagas(ListSagasRequest)         returns (ListSagasResponse);
+  rpc RetrySagaStep(RetrySagaStepRequest) returns (RetrySagaStepResponse);
 }
