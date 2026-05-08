@@ -17,6 +17,8 @@ func NewUpload(client upload.UploadServiceClient) *UploadHandler {
 	return &UploadHandler{client: client}
 }
 
+// ─── Presign ───────────────────────────────────────────────────────────────
+
 type presignRequest struct {
 	FileName    string `json:"fileName"`
 	ContentType string `json:"contentType"`
@@ -37,7 +39,6 @@ func (h *UploadHandler) Presign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// user_id is taken from header; will come from JWT once auth middleware is added
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
 		jsonError(w, "X-User-ID header is required", http.StatusBadRequest)
@@ -67,6 +68,54 @@ func (h *UploadHandler) Presign(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: resp.ExpiresAt.AsTime(),
 	})
 }
+
+// ─── Complete ──────────────────────────────────────────────────────────────
+
+type completeRequest struct {
+	ETag string `json:"etag"`
+}
+
+type completeResponse struct {
+	MediaID string `json:"mediaId"`
+	SagaID  string `json:"sagaId"`
+	Status  string `json:"status"`
+}
+
+func (h *UploadHandler) Complete(w http.ResponseWriter, r *http.Request) {
+	uploadID := r.PathValue("uploadId")
+	if uploadID == "" {
+		jsonError(w, "uploadId is required", http.StatusBadRequest)
+		return
+	}
+
+	var req completeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	resp, err := h.client.ConfirmUpload(ctx, &upload.ConfirmUploadRequest{
+		UploadId: uploadID,
+		Etag:     req.ETag,
+	})
+	if err != nil {
+		jsonError(w, "upstream error", http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(completeResponse{
+		MediaID: resp.MediaId,
+		SagaID:  resp.SagaId,
+		Status:  "PROCESSING",
+	})
+}
+
+// ─── helpers ───────────────────────────────────────────────────────────────
 
 func jsonError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")

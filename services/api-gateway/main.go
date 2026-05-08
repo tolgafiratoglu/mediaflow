@@ -34,6 +34,7 @@ func main() {
 	})
 
 	mux.HandleFunc("POST /uploads/presign", uploadHandler.Presign)
+	mux.HandleFunc("POST /uploads/{uploadId}/complete", uploadHandler.Complete)
 
 	log.Printf("api-gateway starting on %s", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, mux); err != nil {

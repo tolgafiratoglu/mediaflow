@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
-	_ "embed"
+	"embed"
+	"fmt"
+	"io/fs"
 	"log"
 	"net"
+	"sort"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -15,10 +18,12 @@ import (
 	"github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/db"
 	"github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/handler"
 	s3client "github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/s3"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-//go:embed internal/db/migrations/001_uploads.sql
-var migration string
+//go:embed internal/db/migrations/*.sql
+var migrations embed.FS
 
 func main() {
 	cfg := config.Load()
@@ -30,7 +35,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	if _, err := pool.Exec(ctx, migration); err != nil {
+	if err := runMigrations(ctx, pool, migrations); err != nil {
 		log.Fatalf("migration: %v", err)
 	}
 
@@ -52,4 +57,31 @@ func main() {
 	if err := srv.Serve(lis); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
+}
+
+func runMigrations(ctx context.Context, pool *pgxpool.Pool, fsys embed.FS) error {
+	entries, err := fs.ReadDir(fsys, "internal/db/migrations")
+	if err != nil {
+		return err
+	}
+
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		sql, err := fs.ReadFile(fsys, "internal/db/migrations/"+name)
+		if err != nil {
+			return err
+		}
+		if _, err := pool.Exec(ctx, string(sql)); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		log.Printf("migration applied: %s", name)
+	}
+	return nil
 }
