@@ -3,28 +3,29 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gorm.io/gorm"
 
 	"github.com/tolgafiratoglu/mediaflow/proto/upload"
+	"github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/model"
 	s3client "github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/s3"
 )
 
 type UploadHandler struct {
 	upload.UnimplementedUploadServiceServer
-	db         *pgxpool.Pool
+	db         *gorm.DB
 	s3         *s3client.Client
 	presignTTL time.Duration
 }
 
-func New(db *pgxpool.Pool, s3 *s3client.Client, presignTTL time.Duration) *UploadHandler {
+func New(db *gorm.DB, s3 *s3client.Client, presignTTL time.Duration) *UploadHandler {
 	return &UploadHandler{db: db, s3: s3, presignTTL: presignTTL}
 }
 
@@ -51,11 +52,17 @@ func (h *UploadHandler) CreatePresignedUpload(
 		return nil, status.Errorf(codes.Internal, "presign: %v", err)
 	}
 
-	_, err = h.db.Exec(ctx, `
-		INSERT INTO uploads (id, user_id, file_name, content_type, size_bytes, s3_bucket, s3_key, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, uploadID, req.UserId, req.FileName, req.ContentType, req.SizeBytes, h.s3.Bucket(), s3Key, expiresAt)
-	if err != nil {
+	u := model.Upload{
+		ID:          uploadID,
+		UserID:      req.UserId,
+		FileName:    req.FileName,
+		ContentType: req.ContentType,
+		SizeBytes:   req.SizeBytes,
+		S3Bucket:    h.s3.Bucket(),
+		S3Key:       s3Key,
+		ExpiresAt:   &expiresAt,
+	}
+	if err := h.db.WithContext(ctx).Create(&u).Error; err != nil {
 		return nil, status.Errorf(codes.Internal, "db insert: %v", err)
 	}
 
@@ -68,7 +75,7 @@ func (h *UploadHandler) CreatePresignedUpload(
 }
 
 // mediaUploadedEvent is the JSON payload stored in the outbox row.
-// The relay goroutine (to be added) will publish this to Kafka topic "media.uploaded".
+// The relay will pick this up and publish to Kafka topic "media.uploaded".
 type mediaUploadedEvent struct {
 	MediaID     string    `json:"media_id"`
 	UploadID    string    `json:"upload_id"`
@@ -88,26 +95,15 @@ func (h *UploadHandler) ConfirmUpload(
 		return nil, status.Error(codes.InvalidArgument, "upload_id is required")
 	}
 
-	var (
-		userID       string
-		s3Bucket     string
-		s3Key        string
-		contentType  string
-		sizeBytes    int64
-		uploadStatus string
-	)
-	err := h.db.QueryRow(ctx, `
-		SELECT user_id, s3_bucket, s3_key, content_type, size_bytes, status
-		FROM uploads WHERE id = $1
-	`, req.UploadId).Scan(&userID, &s3Bucket, &s3Key, &contentType, &sizeBytes, &uploadStatus)
-	if err == pgx.ErrNoRows {
-		return nil, status.Error(codes.NotFound, "upload not found")
-	}
-	if err != nil {
+	var u model.Upload
+	if err := h.db.WithContext(ctx).First(&u, "id = ?", req.UploadId).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "upload not found")
+		}
 		return nil, status.Errorf(codes.Internal, "db query: %v", err)
 	}
-	if uploadStatus != "PENDING" {
-		return nil, status.Errorf(codes.FailedPrecondition, "upload is not in PENDING state: %s", uploadStatus)
+	if u.Status != "PENDING" {
+		return nil, status.Errorf(codes.FailedPrecondition, "upload is not in PENDING state: %s", u.Status)
 	}
 
 	mediaID := uuid.New().String()
@@ -117,52 +113,53 @@ func (h *UploadHandler) ConfirmUpload(
 	payload, err := json.Marshal(mediaUploadedEvent{
 		MediaID:     mediaID,
 		UploadID:    req.UploadId,
-		UserID:      userID,
-		S3Bucket:    s3Bucket,
-		S3Key:       s3Key,
-		ContentType: contentType,
-		SizeBytes:   sizeBytes,
+		UserID:      u.UserID,
+		S3Bucket:    u.S3Bucket,
+		S3Key:       u.S3Key,
+		ContentType: u.ContentType,
+		SizeBytes:   u.SizeBytes,
 		UploadedAt:  now,
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "marshal event: %v", err)
 	}
 
-	tx, err := h.db.Begin(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "begin tx: %v", err)
-	}
-	defer tx.Rollback(ctx)
+	headers, _ := json.Marshal(map[string]string{"correlation_id": correlationID})
 
-	_, err = tx.Exec(ctx, `
-		INSERT INTO media (id, upload_id, user_id, s3_bucket, s3_key, content_type, size_bytes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, mediaID, req.UploadId, userID, s3Bucket, s3Key, contentType, sizeBytes)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "insert media: %v", err)
-	}
+	txErr := h.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&model.Media{
+			ID:          mediaID,
+			UploadID:    req.UploadId,
+			UserID:      u.UserID,
+			S3Bucket:    u.S3Bucket,
+			S3Key:       u.S3Key,
+			ContentType: u.ContentType,
+			SizeBytes:   u.SizeBytes,
+		}).Error; err != nil {
+			return fmt.Errorf("insert media: %w", err)
+		}
 
-	_, err = tx.Exec(ctx, `
-		UPDATE uploads SET status = 'UPLOADED', media_id = $1, updated_at = now()
-		WHERE id = $2
-	`, mediaID, req.UploadId)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "update upload: %v", err)
-	}
+		if err := tx.Model(&model.Upload{}).Where("id = ?", req.UploadId).Updates(map[string]any{
+			"status":   "UPLOADED",
+			"media_id": mediaID,
+		}).Error; err != nil {
+			return fmt.Errorf("update upload: %w", err)
+		}
 
-	_, err = tx.Exec(ctx, `
-		INSERT INTO outbox (aggregate_id, topic, event_type, payload, headers)
-		VALUES ($1, $2, $3, $4, $5)
-	`, mediaID, "media.uploaded", "MediaUploaded",
-		payload,
-		fmt.Sprintf(`{"correlation_id":"%s"}`, correlationID),
-	)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "insert outbox: %v", err)
-	}
+		if err := tx.Create(&model.Outbox{
+			AggregateID: mediaID,
+			Topic:       "media.uploaded",
+			EventType:   "MediaUploaded",
+			Payload:     payload,
+			Headers:     headers,
+		}).Error; err != nil {
+			return fmt.Errorf("insert outbox: %w", err)
+		}
 
-	if err := tx.Commit(ctx); err != nil {
-		return nil, status.Errorf(codes.Internal, "commit tx: %v", err)
+		return nil
+	})
+	if txErr != nil {
+		return nil, status.Errorf(codes.Internal, "transaction: %v", txErr)
 	}
 
 	return &upload.ConfirmUploadResponse{

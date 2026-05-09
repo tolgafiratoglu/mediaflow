@@ -16,7 +16,8 @@ type Client struct {
 	bucket    string
 }
 
-func New(ctx context.Context, endpoint, region, bucket string) (*Client, error) {
+func New(endpoint, region, bucket string) (*Client, error) {
+	ctx := context.Background()
 	cfg, err := awscfg.LoadDefaultConfig(ctx,
 		awscfg.WithRegion(region),
 		awscfg.WithCredentialsProvider(

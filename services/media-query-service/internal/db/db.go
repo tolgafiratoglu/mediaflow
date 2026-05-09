@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/model"
+	"github.com/tolgafiratoglu/mediaflow/services/media-query-service/internal/model"
 )
 
 func New(dsn string) (*gorm.DB, error) {
@@ -18,7 +18,7 @@ func New(dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("gorm open: %w", err)
 	}
 
-	if err := db.AutoMigrate(&model.Upload{}, &model.Media{}, &model.Outbox{}); err != nil {
+	if err := db.AutoMigrate(&model.MediaView{}); err != nil {
 		return nil, fmt.Errorf("automigrate: %w", err)
 	}
 

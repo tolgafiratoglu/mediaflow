@@ -25,6 +25,7 @@ func main() {
 
 	uploadClient := upload.NewUploadServiceClient(uploadConn)
 	uploadHandler := handler.NewUpload(uploadClient)
+	mediaHandler := handler.NewMedia(cfg.MediaQueryServiceAddr)
 
 	mux := http.NewServeMux()
 
@@ -35,6 +36,7 @@ func main() {
 
 	mux.HandleFunc("POST /uploads/presign", uploadHandler.Presign)
 	mux.HandleFunc("POST /uploads/{uploadId}/complete", uploadHandler.Complete)
+	mux.HandleFunc("GET /media/{mediaId}", mediaHandler.GetMedia)
 
 	log.Printf("api-gateway starting on %s", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, mux); err != nil {
