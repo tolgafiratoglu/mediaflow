@@ -64,9 +64,11 @@ services:
       - HTTP_ADDR=:8080
       - UPLOAD_SERVICE_ADDR=upload-service:50051
       - MEDIA_QUERY_SERVICE_ADDR=http://media-query-service:8086
+      - SAGA_ORCHESTRATOR_ADDR=saga-orchestrator:50051
     depends_on:
       - upload-service
       - media-query-service
+      - saga-orchestrator
 
   upload-service:
     build:
@@ -94,7 +96,12 @@ services:
     container_name: saga-orchestrator
     ports:
       - "8082:50051"
+    environment:
+      - GRPC_ADDR=:50051
+      - DB_DSN=postgres://postgres:postgres@postgres:5432/mediaflow?sslmode=disable
     depends_on:
+      postgres:
+        condition: service_healthy
       kafka:
         condition: service_healthy
 

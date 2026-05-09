@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	sagapb "github.com/tolgafiratoglu/mediaflow/proto/saga"
 	"github.com/tolgafiratoglu/mediaflow/proto/upload"
 	"github.com/tolgafiratoglu/mediaflow/services/api-gateway/internal/config"
 	"github.com/tolgafiratoglu/mediaflow/services/api-gateway/internal/handler"
@@ -23,9 +24,17 @@ func main() {
 	}
 	defer uploadConn.Close()
 
-	uploadClient := upload.NewUploadServiceClient(uploadConn)
-	uploadHandler := handler.NewUpload(uploadClient)
+	sagaConn, err := grpc.NewClient(cfg.SagaOrchestratorAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatalf("saga-orchestrator dial: %v", err)
+	}
+	defer sagaConn.Close()
+
+	uploadHandler := handler.NewUpload(upload.NewUploadServiceClient(uploadConn))
 	mediaHandler := handler.NewMedia(cfg.MediaQueryServiceAddr)
+	sagaHandler := handler.NewSaga(sagapb.NewSagaServiceClient(sagaConn))
 
 	mux := http.NewServeMux()
 
@@ -37,6 +46,7 @@ func main() {
 	mux.HandleFunc("POST /uploads/presign", uploadHandler.Presign)
 	mux.HandleFunc("POST /uploads/{uploadId}/complete", uploadHandler.Complete)
 	mux.HandleFunc("GET /media/{mediaId}", mediaHandler.GetMedia)
+	mux.HandleFunc("GET /sagas/{sagaId}", sagaHandler.GetSaga)
 
 	log.Printf("api-gateway starting on %s", cfg.HTTPAddr)
 	if err := http.ListenAndServe(cfg.HTTPAddr, mux); err != nil {
