@@ -37,3 +37,23 @@ func (h *MediaHandler) GetMedia(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
 }
+
+// ListMedia proxies GET /media?cursor=...&limit=... to media-query-service,
+// forwarding query parameters as-is.
+func (h *MediaHandler) ListMedia(w http.ResponseWriter, r *http.Request) {
+	upstreamURL := fmt.Sprintf("%s/media", h.baseURL)
+	if q := r.URL.RawQuery; q != "" {
+		upstreamURL += "?" + q
+	}
+
+	resp, err := h.client.Get(upstreamURL)
+	if err != nil {
+		jsonError(w, "upstream error", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}

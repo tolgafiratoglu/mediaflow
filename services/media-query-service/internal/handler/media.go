@@ -1,14 +1,21 @@
 package handler
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"gorm.io/gorm"
 
 	"github.com/tolgafiratoglu/mediaflow/services/media-query-service/internal/model"
+)
+
+const (
+	defaultLimit = 20
+	maxLimit     = 100
 )
 
 type MediaHandler struct {
@@ -31,6 +38,46 @@ type mediaResponse struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
+type listResponse struct {
+	Items      []mediaResponse `json:"items"`
+	NextCursor string          `json:"nextCursor,omitempty"`
+}
+
+// cursorPayload is the value encoded into the opaque cursor string.
+type cursorPayload struct {
+	CreatedAt time.Time `json:"t"`
+	ID        string    `json:"i"`
+}
+
+func encodeCursor(createdAt time.Time, id string) string {
+	b, _ := json.Marshal(cursorPayload{CreatedAt: createdAt, ID: id})
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+func decodeCursor(raw string) (cursorPayload, error) {
+	b, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return cursorPayload{}, err
+	}
+	var p cursorPayload
+	return p, json.Unmarshal(b, &p)
+}
+
+func toMediaResponse(m model.MediaView) mediaResponse {
+	return mediaResponse{
+		ID:          m.ID,
+		UserID:      m.UserID,
+		S3Bucket:    m.S3Bucket,
+		S3Key:       m.S3Key,
+		ContentType: m.ContentType,
+		SizeBytes:   m.SizeBytes,
+		Status:      m.Status,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+	}
+}
+
+// GetMedia handles GET /media/{mediaId}
 func (h *MediaHandler) GetMedia(w http.ResponseWriter, r *http.Request) {
 	mediaID := r.PathValue("mediaId")
 	if mediaID == "" {
@@ -49,17 +96,58 @@ func (h *MediaHandler) GetMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(mediaResponse{
-		ID:          m.ID,
-		UserID:      m.UserID,
-		S3Bucket:    m.S3Bucket,
-		S3Key:       m.S3Key,
-		ContentType: m.ContentType,
-		SizeBytes:   m.SizeBytes,
-		Status:      m.Status,
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
-	})
+	json.NewEncoder(w).Encode(toMediaResponse(m))
+}
+
+// ListMedia handles GET /media?cursor=...&limit=20
+// Uses keyset (cursor) pagination ordered by created_at DESC, id DESC.
+func (h *MediaHandler) ListMedia(w http.ResponseWriter, r *http.Request) {
+	limit := defaultLimit
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			if n > maxLimit {
+				n = maxLimit
+			}
+			limit = n
+		}
+	}
+
+	q := h.db.WithContext(r.Context()).Model(&model.MediaView{}).
+		Order("created_at DESC, id DESC")
+
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		c, err := decodeCursor(raw)
+		if err != nil {
+			jsonError(w, "invalid cursor", http.StatusBadRequest)
+			return
+		}
+		// Keyset condition: rows that come after the cursor in DESC order
+		q = q.Where(
+			"(created_at < ?) OR (created_at = ? AND id < ?)",
+			c.CreatedAt, c.CreatedAt, c.ID,
+		)
+	}
+
+	var rows []model.MediaView
+	if err := q.Limit(limit + 1).Find(&rows).Error; err != nil {
+		jsonError(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var nextCursor string
+	if len(rows) > limit {
+		last := rows[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		rows = rows[:limit]
+	}
+
+	items := make([]mediaResponse, 0, len(rows))
+	for _, m := range rows {
+		items = append(items, toMediaResponse(m))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(listResponse{Items: items, NextCursor: nextCursor})
 }
 
 func jsonError(w http.ResponseWriter, msg string, code int) {

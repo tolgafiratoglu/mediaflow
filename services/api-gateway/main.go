@@ -45,6 +45,7 @@ func main() {
 
 	mux.HandleFunc("POST /uploads/presign", uploadHandler.Presign)
 	mux.HandleFunc("POST /uploads/{uploadId}/complete", uploadHandler.Complete)
+	mux.HandleFunc("GET /media", mediaHandler.ListMedia)
 	mux.HandleFunc("GET /media/{mediaId}", mediaHandler.GetMedia)
 	mux.HandleFunc("GET /sagas/{sagaId}", sagaHandler.GetSaga)
 

@@ -26,6 +26,7 @@ func main() {
 		w.Write([]byte(`{"status":"ok","service":"media-query-service"}`))
 	})
 
+	mux.HandleFunc("GET /media", mediaHandler.ListMedia)
 	mux.HandleFunc("GET /media/{mediaId}", mediaHandler.GetMedia)
 
 	log.Printf("media-query-service starting on %s", cfg.HTTPAddr)
