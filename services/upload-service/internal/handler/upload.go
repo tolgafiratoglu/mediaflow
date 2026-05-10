@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
 
+	commonpb "github.com/tolgafiratoglu/mediaflow/proto/common"
 	"github.com/tolgafiratoglu/mediaflow/proto/upload"
 	"github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/model"
 	s3client "github.com/tolgafiratoglu/mediaflow/services/upload-service/internal/s3"
@@ -166,5 +167,71 @@ func (h *UploadHandler) ConfirmUpload(
 		MediaId: mediaID,
 		SagaId:  correlationID,
 		Status:  upload.Status_STATUS_PROCESSING,
+	}, nil
+}
+
+// mediaDeletedEvent is the JSON payload stored in the outbox row for soft deletes.
+type mediaDeletedEvent struct {
+	MediaID   string    `json:"media_id"`
+	UserID    string    `json:"user_id"`
+	DeletedAt time.Time `json:"deleted_at"`
+}
+
+func (h *UploadHandler) DeleteMedia(
+	ctx context.Context,
+	req *upload.DeleteMediaRequest,
+) (*upload.DeleteMediaResponse, error) {
+	if req.MediaId == "" {
+		return nil, status.Error(codes.InvalidArgument, "media_id is required")
+	}
+
+	var m model.Media
+	if err := h.db.WithContext(ctx).First(&m, "id = ?", req.MediaId).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "media not found")
+		}
+		return nil, status.Errorf(codes.Internal, "db query: %v", err)
+	}
+
+	if req.UserId != "" && m.UserID != req.UserId {
+		return nil, status.Error(codes.PermissionDenied, "not owner")
+	}
+
+	now := time.Now()
+	correlationID := uuid.New().String()
+
+	payload, err := json.Marshal(mediaDeletedEvent{
+		MediaID:   req.MediaId,
+		UserID:    m.UserID,
+		DeletedAt: now,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "marshal event: %v", err)
+	}
+
+	headers, _ := json.Marshal(map[string]string{"correlation_id": correlationID})
+
+	txErr := h.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&model.Media{}, "id = ?", req.MediaId).Error; err != nil {
+			return fmt.Errorf("soft delete: %w", err)
+		}
+		if err := tx.Create(&model.Outbox{
+			AggregateID: req.MediaId,
+			Topic:       "media.deleted",
+			EventType:   "MediaDeleted",
+			Payload:     payload,
+			Headers:     headers,
+		}).Error; err != nil {
+			return fmt.Errorf("insert outbox: %w", err)
+		}
+		return nil
+	})
+	if txErr != nil {
+		return nil, status.Errorf(codes.Internal, "transaction: %v", txErr)
+	}
+
+	return &upload.DeleteMediaResponse{
+		MediaId: req.MediaId,
+		Status:  commonpb.Status_STATUS_CANCELLED,
 	}, nil
 }

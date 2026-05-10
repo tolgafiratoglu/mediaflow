@@ -47,6 +47,7 @@ func main() {
 	mux.HandleFunc("POST /uploads/{uploadId}/complete", uploadHandler.Complete)
 	mux.HandleFunc("GET /media", mediaHandler.ListMedia)
 	mux.HandleFunc("GET /media/{mediaId}", mediaHandler.GetMedia)
+	mux.HandleFunc("DELETE /media/{mediaId}", uploadHandler.DeleteMedia)
 	mux.HandleFunc("GET /sagas/{sagaId}", sagaHandler.GetSaga)
 
 	log.Printf("api-gateway starting on %s", cfg.HTTPAddr)

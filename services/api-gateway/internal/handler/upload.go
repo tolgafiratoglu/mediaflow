@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/tolgafiratoglu/mediaflow/proto/upload"
 )
 
@@ -113,6 +116,40 @@ func (h *UploadHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		SagaID:  resp.SagaId,
 		Status:  "PROCESSING",
 	})
+}
+
+// ─── DeleteMedia ───────────────────────────────────────────────────────────
+
+func (h *UploadHandler) DeleteMedia(w http.ResponseWriter, r *http.Request) {
+	mediaID := r.PathValue("mediaId")
+	if mediaID == "" {
+		jsonError(w, "mediaId is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	_, err := h.client.DeleteMedia(ctx, &upload.DeleteMediaRequest{
+		MediaId: mediaID,
+		UserId:  r.Header.Get("X-User-ID"),
+	})
+	if err != nil {
+		if s, ok := status.FromError(err); ok {
+			switch s.Code() {
+			case codes.NotFound:
+				jsonError(w, "media not found", http.StatusNotFound)
+				return
+			case codes.PermissionDenied:
+				jsonError(w, "forbidden", http.StatusForbidden)
+				return
+			}
+		}
+		jsonError(w, "upstream error", http.StatusBadGateway)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────────

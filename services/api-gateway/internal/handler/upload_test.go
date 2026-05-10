@@ -42,6 +42,10 @@ func (m *mockUploadClient) CancelUpload(ctx context.Context, req *upload.CancelU
 	return nil, status.Error(codes.Unimplemented, "not used in tests")
 }
 
+func (m *mockUploadClient) DeleteMedia(ctx context.Context, req *upload.DeleteMediaRequest, opts ...grpc.CallOption) (*upload.DeleteMediaResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used in tests")
+}
+
 // ─── helpers ───────────────────────────────────────────────────────────────
 
 func newPresignRequest(t *testing.T, body any, userID string) *http.Request {

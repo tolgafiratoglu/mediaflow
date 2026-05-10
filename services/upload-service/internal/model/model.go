@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 type Upload struct {
 	ID          string     `gorm:"type:text;primaryKey"`
@@ -19,16 +23,17 @@ type Upload struct {
 }
 
 type Media struct {
-	ID          string    `gorm:"type:text;primaryKey"`
-	UploadID    string    `gorm:"not null"`
-	UserID      string    `gorm:"not null"`
-	S3Bucket    string    `gorm:"not null"`
-	S3Key       string    `gorm:"not null"`
-	ContentType string    `gorm:"not null"`
-	SizeBytes   int64     `gorm:"not null"`
-	Status      string    `gorm:"not null;default:PROCESSING"`
+	ID          string         `gorm:"type:text;primaryKey"`
+	UploadID    string         `gorm:"not null"`
+	UserID      string         `gorm:"not null"`
+	S3Bucket    string         `gorm:"not null"`
+	S3Key       string         `gorm:"not null"`
+	ContentType string         `gorm:"not null"`
+	SizeBytes   int64          `gorm:"not null"`
+	Status      string         `gorm:"not null;default:PROCESSING"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"` // soft delete
 }
 
 type Outbox struct {

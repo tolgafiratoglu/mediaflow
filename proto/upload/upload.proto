@@ -86,6 +86,26 @@ message UploadCancelled {
   string reason    = 2;
 }
 
+// ─── RPC: DeleteMedia ──────────────────────────────────────────────────────
+
+message DeleteMediaRequest {
+  string media_id = 1;
+  string user_id  = 2; // used for ownership check; empty skips the check
+}
+
+message DeleteMediaResponse {
+  string                  media_id = 1;
+  mediaflow.common.Status status   = 2;
+}
+
+// MediaDeleted is produced when DeleteMedia succeeds.
+// Partition key on Kafka is media_id.
+message MediaDeleted {
+  string                    media_id   = 1;
+  string                    user_id    = 2;
+  google.protobuf.Timestamp deleted_at = 3;
+}
+
 // ─── Service ───────────────────────────────────────────────────────────────
 
 service UploadService {
@@ -93,4 +113,5 @@ service UploadService {
   rpc ConfirmUpload(ConfirmUploadRequest)                 returns (ConfirmUploadResponse);
   rpc GetUpload(GetUploadRequest)                         returns (Upload);
   rpc CancelUpload(CancelUploadRequest)                   returns (CancelUploadResponse);
+  rpc DeleteMedia(DeleteMediaRequest)                     returns (DeleteMediaResponse);
 }
