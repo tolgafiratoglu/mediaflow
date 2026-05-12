@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.16
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1
 	github.com/google/uuid v1.6.0
+	github.com/segmentio/kafka-go v0.4.47
 	github.com/tolgafiratoglu/mediaflow/proto v0.0.0
 	google.golang.org/grpc v1.68.0
 	google.golang.org/protobuf v1.36.0

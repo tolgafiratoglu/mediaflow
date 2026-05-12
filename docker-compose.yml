@@ -82,6 +82,7 @@ services:
       - S3_ENDPOINT=http://localstack:4566
       - S3_BUCKET=mediaflow
       - S3_REGION=us-east-1
+      - KAFKA_BROKER=kafka:9092
     depends_on:
       kafka:
         condition: service_healthy
