@@ -51,27 +51,51 @@ Video upload-to-playback pipeline built with Go microservices.
 | notification | SendNotification | Send manually |
 | notification | GetDeliveryStatus | Delivery status |
 
-## Flow
+## End-to-End Request Flow
 
 ```
-Client → POST /uploads/presign → presigned URL
-Client → PUT to S3 (direct)
-Client → POST /uploads/{id}/complete
-         └─ upload-service: DB write + Outbox → Kafka [media.uploaded]
-
-saga-orchestrator consumes media.uploaded
-  ├─ step 1: saga.cmd.metadata   → metadata-service   → saga.reply
-  ├─ step 2: saga.cmd.transcode  → transcoding-service → saga.reply
-  └─ step 3: saga.cmd.thumbnail  → thumbnail-service   → saga.reply
-
-All steps done → media.processing.completed
-  ├─ media-query-service: updates read model
-  └─ notification-service: notifies user
-
-Client → GET /media/{id} → full media view
+┌─────────┐
+│ Client  │
+└────┬────┘
+     │ POST /uploads/presign
+     ▼
+┌─────────────┐         ┌───────────────┐
+│ api-gateway │────────▶│ upload-service│
+└─────────────┘         └──────┬────────┘
+                               │ DB write + Outbox row
+                               ▼
+                         ┌───────────┐
+                         │  Postgres │
+                         └─────┬─────┘
+                               │ outbox relay polls
+                               ▼
+                          Kafka: media.uploaded
+                               │
+               ┌───────────────┴────────────────┐
+               ▼                                ▼
+  ┌────────────────────┐           ┌─────────────────────────┐
+  │ media-query-service│           │    saga-orchestrator     │
+  │ (projection)       │           │                         │
+  │ upsert media_view  │           │  StartSaga              │
+  └────────────────────┘           │    │                    │
+               │                   │    ▼ saga.cmd.metadata  │
+               │              ┌────┤  metadata-service       │
+               │              │    │    │ saga.reply          │
+               │              │    │    ▼ saga.cmd.transcode  │
+               │              │    │  transcoding-service    │
+               │              │    │    │ saga.reply          │
+               │              │    │    ▼ saga.cmd.thumbnail  │
+               │              │    │  thumbnail-service      │
+               │              │    │    │ saga.reply          │
+               │              │    │    ▼ COMPLETED           │
+               │              └────┘                         │
+               │                   └─────────────────────────┘
+               │
+               ▼
+  Client → GET /media/{id} → media_view row
 ```
 
-If any step fails, saga-orchestrator compensates completed steps in reverse order.
+If any step fails, saga-orchestrator dispatches compensation commands in reverse order and marks the saga `FAILED`.
 
 ## Running
 
