@@ -100,6 +100,7 @@ services:
     environment:
       - GRPC_ADDR=:50051
       - DB_DSN=postgres://postgres:postgres@postgres:5432/mediaflow?sslmode=disable
+      - KAFKA_BROKER=kafka:9092
     depends_on:
       postgres:
         condition: service_healthy
@@ -157,6 +158,7 @@ services:
     environment:
       - HTTP_ADDR=:8086
       - DB_DSN=postgres://postgres:postgres@postgres:5432/mediaflow?sslmode=disable
+      - KAFKA_BROKER=kafka:9092
     depends_on:
       postgres:
         condition: service_healthy

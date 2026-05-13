@@ -86,7 +86,9 @@ func (h *MediaHandler) GetMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var m model.MediaView
-	if err := h.db.WithContext(r.Context()).First(&m, "id = ?", mediaID).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).
+		Where("id = ? AND status != ?", mediaID, "DELETED").
+		First(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			jsonError(w, "media not found", http.StatusNotFound)
 			return
@@ -113,6 +115,7 @@ func (h *MediaHandler) ListMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := h.db.WithContext(r.Context()).Model(&model.MediaView{}).
+		Where("status != ?", "DELETED").
 		Order("created_at DESC, id DESC")
 
 	if raw := r.URL.Query().Get("cursor"); raw != "" {
