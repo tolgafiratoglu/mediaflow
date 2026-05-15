@@ -22,6 +22,16 @@ type sagaCommand struct {
 	IssuedAt    time.Time `json:"issued_at"`
 }
 
+// mediaUploadedEvent is the nested payload inside sagaCommand.Payload.
+// It matches the JSON published by upload-service's outbox relay.
+type mediaUploadedEvent struct {
+	MediaID     string `json:"media_id"`
+	UserID      string `json:"user_id"`
+	S3Bucket    string `json:"s3_bucket"`
+	S3Key       string `json:"s3_key"`
+	ContentType string `json:"content_type"`
+}
+
 // sagaReply is the JSON payload published back to saga.reply.
 type sagaReply struct {
 	CommandID  string    `json:"command_id"`
@@ -29,13 +39,12 @@ type sagaReply struct {
 	StepNo     int32     `json:"step_no"`
 	Success    bool      `json:"success"`
 	Error      string    `json:"error,omitempty"`
-	Payload    []byte    `json:"payload,omitempty"`
 	FinishedAt time.Time `json:"finished_at"`
 }
 
-// Extractor is a function that performs the actual metadata extraction.
-// Injected so the consumer stays testable and the logic lives in one place.
-type Extractor func(ctx context.Context, db *gorm.DB, cmd sagaCommand) error
+// Extractor is called with the parsed coordinates of the media asset.
+// Implementations download the file, analyse it, and persist the result.
+type Extractor func(ctx context.Context, db *gorm.DB, mediaID, s3Bucket, s3Key string) error
 
 // Consumer reads saga.cmd.metadata commands and replies to saga.reply.
 type Consumer struct {
@@ -46,7 +55,6 @@ type Consumer struct {
 }
 
 // New returns a Consumer wired to the given broker.
-// extractor is called for each command; pass nil to use the default stub.
 func New(broker string, db *gorm.DB, extractor Extractor) *Consumer {
 	return &Consumer{
 		reader: kafka.NewReader(kafka.ReaderConfig{
@@ -92,8 +100,6 @@ func (c *Consumer) Run(ctx context.Context) {
 			log.Printf("metadata-consumer: commit error: %v", commitErr)
 		}
 
-		// replyErr is logged but we still commit – publishing the reply is
-		// best-effort; the saga-orchestrator has its own timeout / retry logic.
 		if replyErr != nil {
 			log.Printf("metadata-consumer: handle error [offset=%d]: %v", msg.Offset, replyErr)
 		}
@@ -106,14 +112,19 @@ func (c *Consumer) handle(ctx context.Context, msg kafka.Message) error {
 		return fmt.Errorf("unmarshal command: %w", err)
 	}
 
-	log.Printf("metadata-consumer: received command %s (saga=%s media=%s)", cmd.CommandType, cmd.SagaID, cmd.AggregateID)
+	log.Printf("metadata-consumer: received %s (saga=%s media=%s)", cmd.CommandType, cmd.SagaID, cmd.AggregateID)
+
+	// Parse the nested media.uploaded payload to get S3 coordinates.
+	var event mediaUploadedEvent
+	if err := json.Unmarshal(cmd.Payload, &event); err != nil {
+		return c.publishReply(ctx, cmd, fmt.Errorf("unmarshal payload: %w", err))
+	}
 
 	var extractErr error
 	if c.extractor != nil {
-		extractErr = c.extractor(ctx, c.db, cmd)
+		extractErr = c.extractor(ctx, c.db, cmd.AggregateID, event.S3Bucket, event.S3Key)
 	} else {
-		// TODO(step-2): replace with real extractor
-		log.Printf("metadata-consumer: extractor not set – skipping extraction for media %s", cmd.AggregateID)
+		log.Printf("metadata-consumer: no extractor configured – sending success stub for media %s", cmd.AggregateID)
 	}
 
 	return c.publishReply(ctx, cmd, extractErr)
@@ -147,6 +158,6 @@ func (c *Consumer) publishReply(ctx context.Context, cmd sagaCommand, extractErr
 		return fmt.Errorf("publish reply: %w", err)
 	}
 
-	log.Printf("metadata-consumer: published reply success=%v for saga %s step %d", reply.Success, cmd.SagaID, cmd.StepNo)
+	log.Printf("metadata-consumer: published reply success=%v (saga=%s step=%d)", reply.Success, cmd.SagaID, cmd.StepNo)
 	return nil
 }
