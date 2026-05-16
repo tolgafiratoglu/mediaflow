@@ -1,11 +1,12 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN go build -o service .
 
-FROM alpine:3.19
+FROM alpine:3.20
+# ffmpeg ships with ffprobe — required for duration probing and frame extraction.
 RUN apk add --no-cache ffmpeg
 WORKDIR /app
 COPY --from=builder /app/service .

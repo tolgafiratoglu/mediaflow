@@ -113,8 +113,17 @@ services:
     container_name: transcoding-service
     ports:
       - "8083:50051"
+    environment:
+      - GRPC_ADDR=:50051
+      - DB_DSN=postgres://postgres:postgres@postgres:5432/mediaflow?sslmode=disable
+      - KAFKA_BROKER=kafka:9092
+      - S3_ENDPOINT=http://localstack:4566
+      - S3_BUCKET=mediaflow
+      - S3_REGION=us-east-1
     depends_on:
       kafka:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
       localstack:
         condition: service_started
@@ -125,8 +134,17 @@ services:
     container_name: thumbnail-service
     ports:
       - "8084:50051"
+    environment:
+      - GRPC_ADDR=:50051
+      - DB_DSN=postgres://postgres:postgres@postgres:5432/mediaflow?sslmode=disable
+      - KAFKA_BROKER=kafka:9092
+      - S3_ENDPOINT=http://localstack:4566
+      - S3_BUCKET=mediaflow
+      - S3_REGION=us-east-1
     depends_on:
       kafka:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
       localstack:
         condition: service_started
